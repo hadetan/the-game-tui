@@ -12,6 +12,7 @@ npm start
 - Move: WASD or Arrow keys
 - Attack: Space
 - Quit: q or Ctrl+C
+- Pause: p
 
 ## features
 - Pick-3 reward menu (Blessed) after clearing a level.
