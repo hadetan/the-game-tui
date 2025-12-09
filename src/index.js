@@ -364,21 +364,52 @@ function showCutscene(text, onDone) {
   term.fullscreen(false);
   term.clear();
 
-  const cols = Math.max(40, Math.min(term.width || 80, 100));
+  const cols = Math.max(50, Math.min(term.width || 80, 110));
   const boxWidth = cols - 2;
-  const lines = `${text || '...'}`.split('\n');
-  const header = '─ CUTSCENE ─';
+  const header = ' CUTSCENE ';
+  const body = (text || '...').trim();
 
+  term.color('white');
   term.moveTo(1, 1);
-  term(`┌${'─'.repeat(boxWidth)}┐\n`);
-  term(`│${header.padEnd(boxWidth, ' ')}│\n`);
-  term(`├${'─'.repeat(boxWidth)}┤\n`);
-  const body = lines.join(' ');
-  term.wrapColumn({ x: 2, y: 4, width: boxWidth - 1, height: 16, text: body });
-  term.moveTo(1, 20);
+  term(`┌${'─'.repeat(boxWidth)}┐`);
+  term.moveTo(1, 2);
+  term(`│${header.padEnd(boxWidth, ' ')}│`);
+  term.moveTo(1, 3);
+  term(`├${'─'.repeat(boxWidth)}┤`);
+
+  // Render body text with a simple word-wrap so content is always visible
+  const bodyWidth = boxWidth - 2;
+  const words = body.split(/\s+/);
+  const lines = [];
+  let current = '';
+  words.forEach((word) => {
+    if ((current + ' ' + word).trim().length > bodyWidth) {
+      lines.push(current.trim());
+      current = word;
+    } else {
+      current = current ? `${current} ${word}` : word;
+    }
+  });
+  if (current) lines.push(current.trim());
+
+  const maxBodyLines = 14;
+  for (let i = 0; i < Math.min(lines.length, maxBodyLines); i += 1) {
+    term.moveTo(2, 4 + i);
+    term(lines[i].padEnd(bodyWidth, ' '));
+  }
+  // If text was shorter, pad remaining lines so frame looks filled
+  for (let i = lines.length; i < maxBodyLines; i += 1) {
+    term.moveTo(2, 4 + i);
+    term(' '.repeat(bodyWidth));
+  }
+
+  const promptY = 19;
+  term.moveTo(1, promptY);
+  term(`├${'─'.repeat(boxWidth)}┤`);
+  term.moveTo(1, promptY + 1);
   const prompt = 'Press Enter to continue...';
-  term(`├${'─'.repeat(boxWidth)}┤\n`);
-  term(`│${prompt.padEnd(boxWidth, ' ')}│\n`);
+  term(`│${prompt.padEnd(boxWidth, ' ')}│`);
+  term.moveTo(1, promptY + 2);
   term(`└${'─'.repeat(boxWidth)}┘`);
 
   term.grabInput(true);
