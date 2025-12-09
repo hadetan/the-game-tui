@@ -1,6 +1,6 @@
 # The Cleaner’s March (Terminal Prototype)
 
-Prototype terminal-based real-time tactical roguelite prototype. Move, attack, and clear a basic room with one enemy. Built with Node.js and `terminal-kit`.
+Terminal-based real-time tactical roguelite prototype. Added a pick-3 reward menu (Blessed) after each wave, with upgrades that immediately affect player stats.
 
 ## Run
 ```bash
@@ -12,3 +12,8 @@ npm start
 - Move: WASD or Arrow keys
 - Attack: Space
 - Quit: q or Ctrl+C
+
+## features
+- Pick-3 reward menu (Blessed) after clearing a wave.
+- Weighted rarity pool (common/uncommon/rare).
+- Upgrades adjust stats live (damage, attack cooldown, HP).

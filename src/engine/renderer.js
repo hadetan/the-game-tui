@@ -32,7 +32,8 @@ function render(state) {
   }
 
   // HUD
-  term.moveTo(1, height + 1, `HP: ${player.hp}/${player.maxHp}  Enemies: ${enemies.filter(e => e.hp > 0).length}`);
+  const aliveEnemies = enemies.filter(e => e.hp > 0).length;
+  term.moveTo(1, height + 1, `HP: ${player.hp}/${player.maxHp}  DMG: ${player.weaponDamage}  ATK CD: ${player.attackCooldownMs}ms  Enemies: ${aliveEnemies}`);
   term.moveTo(1, height + 2, 'Move: WASD/Arrows  Attack: Space  Quit: q or Ctrl+C');
 
   // Messages
