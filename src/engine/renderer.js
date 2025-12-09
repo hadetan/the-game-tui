@@ -34,11 +34,12 @@ function render(state) {
   // HUD
   const aliveEnemies = enemies.filter(e => e.hp > 0).length;
   term.moveTo(1, height + 1, `HP: ${player.hp}/${player.maxHp}  DMG: ${player.weaponDamage}  ATK CD: ${player.attackCooldownMs}ms  Enemies: ${aliveEnemies}`);
-  term.moveTo(1, height + 2, 'Move: WASD/Arrows  Attack: Space  Quit: q or Ctrl+C');
+  term.moveTo(1, height + 2, `Level: ${state.levelIndex + 1}/${state.totalLevels}  Wave: ${state.waveIndex + 1}/${state.totalWaves}`);
+  term.moveTo(1, height + 3, 'Move: WASD/Arrows  Attack: Space  Quit: q or Ctrl+C');
 
   // Messages
   const lastMessage = messages[messages.length - 1] || '';
-  term.moveTo(1, height + 3, `Log: ${lastMessage}`);
+  term.moveTo(1, height + 4, `Log: ${lastMessage}`);
 }
 
 module.exports = { render };

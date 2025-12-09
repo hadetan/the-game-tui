@@ -14,6 +14,8 @@ npm start
 - Quit: q or Ctrl+C
 
 ## features
-- Pick-3 reward menu (Blessed) after clearing a wave.
+- Pick-3 reward menu (Blessed) after clearing a level.
 - Weighted rarity pool (common/uncommon/rare).
 - Upgrades adjust stats live (damage, attack cooldown, HP).
+- Scripted levels with staggered waves and a difficulty budget per level.
+- Three enemy types with different speed/cost profiles.

@@ -5,9 +5,14 @@ const Enemy = require('./entities/Enemy');
 const { render } = require('./engine/renderer');
 const { setupInput, teardownInput } = require('./engine/input');
 const { upgrades, rarityWeight } = require('./data/upgrades');
+const { enemies } = require('./data/enemies');
+const { levels } = require('./data/levels');
+const { createWaveState, waveTick, waveDone } = require('./engine/spawner');
 
 const width = 40;
 const height = 18;
+const MAX_SIMULTANEOUS_ENEMIES = 5;
+const maxActiveEnemies = 5; // cap to prevent overwhelming swarms
 
 const state = {
   width,
@@ -15,8 +20,15 @@ const state = {
   player: new Player(5, 5),
   enemies: [],
   messages: ['Ready.'],
-  wave: 1,
   menuOpen: false,
+  levelIndex: 0,
+  waveIndex: 0,
+  waveState: null,
+  tickCount: 0,
+  levelComplete: false,
+  totalLevels: levels.length,
+  totalWaves: levels[0].waves.length,
+  budgetRemaining: levels[0].budget,
 };
 
 let running = true;
@@ -30,17 +42,32 @@ function randInt(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-function spawnEnemy(strength = 0) {
+function spawnEnemy(type, levelScale = 0) {
+  const template = enemies[type];
+  if (!template) {
+    state.messages.push(`Unknown enemy type: ${type}`);
+    return false;
+  }
+  const alive = state.enemies.filter((e) => e.hp > 0).length;
+  if (alive >= maxActiveEnemies) {
+    return false; // do not overspawn; wait until space frees up
+  }
+  const cost = template.cost || 1;
+  if (state.budgetRemaining - cost < 0) {
+    state.messages.push('Spawn budget exhausted; skipping enemy.');
+    return false;
+  }
+  state.budgetRemaining -= cost;
+
   let x = randInt(2, width - 3);
   let y = randInt(2, height - 3);
   if (x === state.player.x && y === state.player.y) {
     x = clamp(x + 2, 1, width - 2);
     y = clamp(y + 1, 1, height - 2);
   }
-  const enemy = new Enemy(x, y);
-  enemy.hp += strength;
-  enemy.damage += Math.floor(strength / 2);
+  const enemy = new Enemy(template, x, y, levelScale);
   state.enemies.push(enemy);
+  return true;
 }
 
 function tryMove(dx, dy) {
@@ -70,6 +97,7 @@ function attack() {
 
 function enemyAct(enemy) {
   if (enemy.hp <= 0) return;
+  if (state.tickCount % enemy.moveCooldownTicks !== 0) return;
   const dx = state.player.x - enemy.x;
   const dy = state.player.y - enemy.y;
   const stepX = dx === 0 ? 0 : dx / Math.abs(dx);
@@ -120,15 +148,28 @@ function handleKey(name) {
   }
 }
 
-function checkEndConditions() {
+function checkLevelAndWaveCompletion() {
   if (state.player.hp <= 0) {
     exitGame('You were defeated.');
-    return;
+    return true;
   }
+
   const alive = state.enemies.filter((e) => e.hp > 0);
-  if (alive.length === 0 && !state.menuOpen) {
-    openRewardMenu();
+  const currentLevel = levels[state.levelIndex];
+  const waveFinished = state.waveState && waveDone(state.waveState);
+
+  if (waveFinished && alive.length === 0 && !state.menuOpen) {
+    if (state.waveIndex + 1 < currentLevel.waves.length) {
+      state.waveIndex += 1;
+      state.messages.push(`Starting wave ${state.waveIndex + 1}.`);
+      state.waveState = createWaveState(currentLevel.waves[state.waveIndex]);
+      state.totalWaves = currentLevel.waves.length;
+    } else {
+      state.levelComplete = true;
+      openRewardMenu();
+    }
   }
+  return false;
 }
 
 function exitGame(message) {
@@ -137,7 +178,7 @@ function exitGame(message) {
   clearInterval(tickHandle);
   teardownInput();
   state.messages.push(message);
-  render(state);
+  render({ ...state, totalLevels: levels.length, totalWaves: levels[state.levelIndex].waves.length });
   term.moveTo(1, height + 4, 'Press Enter to exit...');
   term.grabInput(false);
   term.on('key', (name) => {
@@ -150,9 +191,21 @@ function exitGame(message) {
 
 function gameTick() {
   if (state.menuOpen) return;
+  state.tickCount += 1;
+
+  if (state.waveState) {
+    waveTick(state.waveState, (type) => {
+      const alive = state.enemies.filter((e) => e.hp > 0).length;
+      if (alive >= MAX_SIMULTANEOUS_ENEMIES) return;
+      spawnEnemy(type, state.levelIndex);
+    });
+  }
+
   state.enemies.forEach(enemyAct);
-  checkEndConditions();
-  render(state);
+  const ended = checkLevelAndWaveCompletion();
+  if (!ended) {
+    render({ ...state, totalLevels: levels.length, totalWaves: levels[state.levelIndex].waves.length });
+  }
 }
 
 function startTick() {
@@ -210,6 +263,8 @@ function openRewardMenu() {
     if (!options[index]) return;
     const chosen = options[index];
     chosen.apply(state.player);
+    // Small heal between levels to smooth difficulty
+    state.player.hp = Math.min(state.player.maxHp, state.player.hp + 5);
     state.messages.push(`Picked ${chosen.name}.`);
     screen.destroy();
     resumeFromMenu();
@@ -228,17 +283,28 @@ function resumeFromMenu() {
   term.fullscreen(true);
   setupInput(handleKey);
   state.menuOpen = false;
-  spawnEnemy(state.wave);
-  state.wave += 1;
-  render(state);
+  state.levelIndex = (state.levelIndex + 1) % levels.length;
+  state.waveIndex = 0;
+  const level = levels[state.levelIndex];
+  state.enemies = [];
+  state.levelComplete = false;
+  state.waveState = createWaveState(level.waves[state.waveIndex]);
+  state.totalWaves = level.waves.length;
+  state.budgetRemaining = level.budget;
+  state.messages.push(`Starting level ${state.levelIndex + 1}: ${level.name}`);
+  render({ ...state, totalLevels: levels.length, totalWaves: level.waves.length });
   startTick();
 }
 
 function start() {
   term.fullscreen(true);
   setupInput(handleKey);
-  spawnEnemy(0);
-  render(state);
+  const level = levels[state.levelIndex];
+  state.waveState = createWaveState(level.waves[state.waveIndex]);
+  state.totalWaves = level.waves.length;
+  state.budgetRemaining = level.budget;
+  state.messages.push(`Starting level ${state.levelIndex + 1}: ${level.name}`);
+  render({ ...state, totalLevels: levels.length, totalWaves: level.waves.length });
   startTick();
 }
 
