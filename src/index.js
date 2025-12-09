@@ -29,6 +29,8 @@ const state = {
   totalLevels: levels.length,
   totalWaves: levels[0].waves.length,
   budgetRemaining: levels[0].budget,
+  currentAct: levels[0].act,
+  cutsceneOpen: false,
 };
 
 let running = true;
@@ -121,6 +123,14 @@ function enemyAct(enemy) {
     state.player.hp -= enemy.damage;
     state.player.playstyle.damageTaken += enemy.damage;
     state.messages.push('Enemy hits you!');
+  }
+
+  if (enemy.boss && enemy.aoeCooldown > 0 && state.tickCount % enemy.aoeCooldown === 0) {
+    if (dist <= enemy.aoeRange) {
+      state.player.hp -= enemy.aoeDamage;
+      state.player.playstyle.damageTaken += enemy.aoeDamage;
+      state.messages.push(`${enemy.name} pulses!`);
+    }
   }
 }
 
@@ -324,8 +334,13 @@ function resumeFromMenu() {
   state.totalWaves = level.waves.length;
   state.budgetRemaining = level.budget;
   state.messages.push(`Starting level ${state.levelIndex + 1}: ${level.name}`);
+  state.currentAct = level.act;
   render({ ...state, totalLevels: levels.length, totalWaves: level.waves.length });
-  startTick();
+  if (level.cutscene) {
+    showCutscene(level.cutscene, () => startTick());
+  } else {
+    startTick();
+  }
 }
 
 function start() {
@@ -337,7 +352,46 @@ function start() {
   state.budgetRemaining = level.budget;
   state.messages.push(`Starting level ${state.levelIndex + 1}: ${level.name}`);
   render({ ...state, totalLevels: levels.length, totalWaves: level.waves.length });
-  startTick();
+  if (level.cutscene) {
+    showCutscene(level.cutscene, () => startTick());
+  } else {
+    startTick();
+  }
+}
+
+function showCutscene(text, onDone) {
+  state.cutsceneOpen = true;
+  term.fullscreen(false);
+  term.clear();
+
+  const cols = Math.max(40, Math.min(term.width || 80, 100));
+  const boxWidth = cols - 2;
+  const lines = `${text || '...'}`.split('\n');
+  const header = '─ CUTSCENE ─';
+
+  term.moveTo(1, 1);
+  term(`┌${'─'.repeat(boxWidth)}┐\n`);
+  term(`│${header.padEnd(boxWidth, ' ')}│\n`);
+  term(`├${'─'.repeat(boxWidth)}┤\n`);
+  const body = lines.join(' ');
+  term.wrapColumn({ x: 2, y: 4, width: boxWidth - 1, height: 16, text: body });
+  term.moveTo(1, 20);
+  const prompt = 'Press Enter to continue...';
+  term(`├${'─'.repeat(boxWidth)}┤\n`);
+  term(`│${prompt.padEnd(boxWidth, ' ')}│\n`);
+  term(`└${'─'.repeat(boxWidth)}┘`);
+
+  term.grabInput(true);
+  const handler = (name) => {
+    if (name === 'ENTER' || name === 'RETURN' || name === 'SPACE' || name === 'q') {
+      term.removeListener('key', handler);
+      term.clear();
+      term.fullscreen(true);
+      state.cutsceneOpen = false;
+      if (onDone) onDone();
+    }
+  };
+  term.on('key', handler);
 }
 
 start();

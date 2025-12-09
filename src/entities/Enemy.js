@@ -9,6 +9,10 @@ class Enemy {
     this.lastMovedTick = 0;
     this.name = template.name;
     this.type = template.id;
+    this.boss = Boolean(template.boss);
+    this.aoeRange = template.aoeRange || 0;
+    this.aoeDamage = template.aoeDamage || 0;
+    this.aoeCooldown = template.aoeCooldown || 0;
   }
 }
 

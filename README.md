@@ -18,5 +18,5 @@ npm start
 - Weighted rarity pool (common/uncommon/rare) with soft guarantees.
 - Personalized upgrade weighting using playstyle stats (damage dealt, damage taken).
 - Upgrades adjust stats live (damage, attack cooldown, HP).
-- Scripted levels with staggered waves and a difficulty budget per level.
-- Three enemy types with different speed/cost profiles and a spawn cap to prevent swarms.
+- Scripted acts and levels (4 acts, 12 levels) with staggered waves and difficulty budgets.
+- Boss fights each act with simple AoE pulse mechanics; spawn cap to prevent swarms.
