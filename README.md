@@ -20,3 +20,4 @@ npm start
 - Upgrades adjust stats live (damage, attack cooldown, HP).
 - Scripted acts and levels (4 acts, 12 levels) with staggered waves and difficulty budgets.
 - Boss fights each act with simple AoE pulse mechanics; spawn cap to prevent swarms.
+- Bosses with health bar

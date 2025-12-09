@@ -39,6 +39,8 @@ const enemies = {
     aoeRange: 1,
     aoeDamage: 2,
     aoeCooldown: 8,
+    resistanceMin: 0.05,
+    resistanceMax: 0.12,
   },
   boss_linebreaker: {
     id: 'boss_linebreaker',
@@ -52,6 +54,8 @@ const enemies = {
     aoeRange: 1,
     aoeDamage: 3,
     aoeCooldown: 7,
+    resistanceMin: 0.1,
+    resistanceMax: 0.18,
   },
   boss_warden: {
     id: 'boss_warden',
@@ -65,6 +69,8 @@ const enemies = {
     aoeRange: 2,
     aoeDamage: 2,
     aoeCooldown: 6,
+    resistanceMin: 0.15,
+    resistanceMax: 0.24,
   },
   boss_core: {
     id: 'boss_core',
@@ -78,6 +84,8 @@ const enemies = {
     aoeRange: 2,
     aoeDamage: 3,
     aoeCooldown: 5,
+    resistanceMin: 0.2,
+    resistanceMax: 0.3,
   },
 };
 

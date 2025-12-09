@@ -93,7 +93,10 @@ function attack() {
   }
   targets.forEach((enemy) => {
     const before = enemy.hp;
-    enemy.hp -= state.player.weaponDamage;
+    const resistance = enemy.resistance || 0;
+    const raw = state.player.weaponDamage;
+    const reduced = enemy.boss ? Math.max(1, Math.floor(raw * (1 - resistance))) : raw;
+    enemy.hp -= reduced;
     const dealt = Math.max(0, before - Math.max(0, enemy.hp));
     state.player.playstyle.damageDealt.melee += dealt;
     if (enemy.hp <= 0 && !enemy._dead) {

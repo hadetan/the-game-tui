@@ -32,14 +32,25 @@ function render(state) {
   }
 
   // HUD
+  let hudY = height + 1;
   const aliveEnemies = enemies.filter(e => e.hp > 0).length;
-  term.moveTo(1, height + 1, `HP: ${player.hp}/${player.maxHp}  DMG: ${player.weaponDamage}  ATK CD: ${player.attackCooldownMs}ms  Enemies: ${aliveEnemies}`);
-  term.moveTo(1, height + 2, `Level: ${state.levelIndex + 1}/${state.totalLevels}  Wave: ${state.waveIndex + 1}/${state.totalWaves}`);
-  term.moveTo(1, height + 3, 'Move: WASD/Arrows  Attack: Space  Quit: q or Ctrl+C');
+  term.moveTo(1, hudY++, `HP: ${player.hp}/${player.maxHp}  DMG: ${player.weaponDamage}  ATK CD: ${player.attackCooldownMs}ms  Enemies: ${aliveEnemies}`);
+  term.moveTo(1, hudY++, `Level: ${state.levelIndex + 1}/${state.totalLevels}  Wave: ${state.waveIndex + 1}/${state.totalWaves}`);
+  term.moveTo(1, hudY++, 'Move: WASD/Arrows  Attack: Space  Quit: q or Ctrl+C');
+
+  const boss = enemies.find((e) => e.boss && e.hp > 0);
+  if (boss) {
+    const barWidth = 30;
+    const ratio = Math.max(0, Math.min(1, boss.hp / (boss.maxHp || boss.hp)));
+    const filled = Math.round(barWidth * ratio);
+    const bar = `[${'#'.repeat(filled)}${'-'.repeat(barWidth - filled)}]`;
+    const resPct = Math.round((boss.resistance || 0) * 100);
+    term.moveTo(1, hudY++, `Boss: ${boss.name} ${bar} ${Math.max(0, boss.hp)}/${boss.maxHp}  Res: ${resPct}%`);
+  }
 
   // Messages
   const lastMessage = messages[messages.length - 1] || '';
-  term.moveTo(1, height + 4, `Log: ${lastMessage}`);
+  term.moveTo(1, hudY++, `Log: ${lastMessage}`);
 }
 
 module.exports = { render };

@@ -3,7 +3,8 @@ class Enemy {
     this.x = x;
     this.y = y;
     this.char = template.char || 'E';
-    this.hp = template.hp + scale;
+    this.maxHp = template.hp + scale;
+    this.hp = this.maxHp;
     this.damage = template.damage + Math.floor(scale / 2);
     this.moveCooldownTicks = template.moveCooldownTicks || 1;
     this.lastMovedTick = 0;
@@ -13,6 +14,11 @@ class Enemy {
     this.aoeRange = template.aoeRange || 0;
     this.aoeDamage = template.aoeDamage || 0;
     this.aoeCooldown = template.aoeCooldown || 0;
+
+    const minRes = template.resistanceMin || 0;
+    const maxRes = template.resistanceMax || 0;
+    const roll = Math.random() * (maxRes - minRes) + minRes;
+    this.resistance = this.boss ? Number(roll.toFixed(2)) : 0;
   }
 }
 
