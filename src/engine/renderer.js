@@ -2,6 +2,12 @@ const term = require('terminal-kit').terminal;
 
 function render(state) {
   const { width, height, player, enemies, messages } = state;
+  if (state.options && state.options.highContrast) {
+    term.bgBlack();
+    term.brightWhite();
+  } else {
+    term.styleReset();
+  }
   term.clear();
 
   const grid = [];
@@ -37,6 +43,9 @@ function render(state) {
   term.moveTo(1, hudY++, `HP: ${player.hp}/${player.maxHp}  DMG: ${player.weaponDamage}  ATK CD: ${player.attackCooldownMs}ms  Enemies: ${aliveEnemies}`);
   term.moveTo(1, hudY++, `Level: ${state.levelIndex + 1}/${state.totalLevels}  Wave: ${state.waveIndex + 1}/${state.totalWaves}`);
   term.moveTo(1, hudY++, 'Move: WASD/Arrows  Attack: Space  Quit: q or Ctrl+C');
+  if (state.difficulty) {
+    term.moveTo(1, hudY++, `Difficulty: ${state.difficulty.label || state.difficulty.key}`);
+  }
 
   const boss = enemies.find((e) => e.boss && e.hp > 0);
   if (boss) {

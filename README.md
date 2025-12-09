@@ -20,4 +20,8 @@ npm start
 - Upgrades adjust stats live (damage, attack cooldown, HP).
 - Scripted acts and levels (4 acts, 12 levels) with staggered waves and difficulty budgets.
 - Boss fights each act with simple AoE pulse mechanics; spawn cap to prevent swarms.
-- Bosses with health bar
+- Bosses with health bar.
+- Pause/options menu (sound toggle placeholder, high-contrast theme, attack key remap) — press `p` in-game.
+- Quick-save/load from pause menu writes `savegame.json`.
+- Difficulty modes via `--difficulty=easy|normal|hard` (or `DIFFICULTY` env) scaling enemy HP/damage.
+- Telemetry logged to `telemetry.json` (death counts per level, upgrade picks per category) for balancing.

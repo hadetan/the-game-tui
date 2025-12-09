@@ -1,4 +1,6 @@
 const term = require('terminal-kit').terminal;
+const fs = require('fs');
+const path = require('path');
 const blessed = require('blessed');
 const Player = require('./entities/Player');
 const Enemy = require('./entities/Enemy');
@@ -9,10 +11,28 @@ const { enemies } = require('./data/enemies');
 const { levels } = require('./data/levels');
 const { createWaveState, waveTick, waveDone } = require('./engine/spawner');
 
+const SAVE_PATH = path.join(__dirname, '..', 'savegame.json');
+const TELEMETRY_PATH = path.join(__dirname, '..', 'telemetry.json');
+const DIFFICULTIES = {
+  easy: { hp: 0.85, dmg: 0.85, label: 'Easy' },
+  normal: { hp: 1, dmg: 1, label: 'Normal' },
+  hard: { hp: 1.25, dmg: 1.2, label: 'Hard' },
+};
+
+function getDifficultySetting() {
+  const arg = process.argv.find((a) => a.startsWith('--difficulty='));
+  const env = process.env.DIFFICULTY;
+  const pick = (arg && arg.split('=')[1]) || env || 'normal';
+  const key = pick.toLowerCase();
+  return DIFFICULTIES[key] ? { key, ...DIFFICULTIES[key] } : { key: 'normal', ...DIFFICULTIES.normal };
+}
+
 const width = 40;
 const height = 18;
 const MAX_SIMULTANEOUS_ENEMIES = 5;
 const maxActiveEnemies = 5; // cap to prevent overwhelming swarms
+
+const difficultySetting = getDifficultySetting();
 
 const state = {
   width,
@@ -21,6 +41,7 @@ const state = {
   enemies: [],
   messages: ['Ready.'],
   menuOpen: false,
+  paused: false,
   levelIndex: 0,
   waveIndex: 0,
   waveState: null,
@@ -31,6 +52,13 @@ const state = {
   budgetRemaining: levels[0].budget,
   currentAct: levels[0].act,
   cutsceneOpen: false,
+  difficulty: difficultySetting,
+  options: {
+    soundOn: true,
+    highContrast: false,
+    attackKey: ' ',
+  },
+  telemetry: null,
 };
 
 let running = true;
@@ -42,6 +70,137 @@ function clamp(value, min, max) {
 
 function randInt(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function saveGame() {
+  try {
+    const payload = {
+      levelIndex: state.levelIndex,
+      waveIndex: state.waveIndex,
+      tickCount: state.tickCount,
+      budgetRemaining: state.budgetRemaining,
+      difficulty: state.difficulty,
+      player: {
+        x: state.player.x,
+        y: state.player.y,
+        hp: state.player.hp,
+        maxHp: state.player.maxHp,
+        weaponDamage: state.player.weaponDamage,
+        attackCooldownMs: state.player.attackCooldownMs,
+        playstyle: state.player.playstyle,
+      },
+      enemies: state.enemies.map((e) => ({
+        type: e.type,
+        x: e.x,
+        y: e.y,
+        hp: e.hp,
+        maxHp: e.maxHp,
+        damage: e.damage,
+        moveCooldownTicks: e.moveCooldownTicks,
+        aoeRange: e.aoeRange,
+        aoeDamage: e.aoeDamage,
+        aoeCooldown: e.aoeCooldown,
+        boss: e.boss,
+        resistance: e.resistance,
+      })),
+      waveState: state.waveState,
+      options: state.options,
+    };
+    fs.writeFileSync(SAVE_PATH, JSON.stringify(payload, null, 2));
+    state.messages.push('Run saved.');
+  } catch (err) {
+    state.messages.push('Save failed.');
+  }
+}
+
+function ensureTelemetry() {
+  if (!state.telemetry) {
+    if (fs.existsSync(TELEMETRY_PATH)) {
+      try {
+        state.telemetry = JSON.parse(fs.readFileSync(TELEMETRY_PATH, 'utf-8'));
+      } catch (err) {
+        state.telemetry = { deathsByLevel: {}, picksByCategory: {} };
+      }
+    } else {
+      state.telemetry = { deathsByLevel: {}, picksByCategory: {} };
+    }
+  }
+}
+
+function persistTelemetry() {
+  ensureTelemetry();
+  try {
+    fs.writeFileSync(TELEMETRY_PATH, JSON.stringify(state.telemetry, null, 2));
+  } catch (err) {
+    // ignore telemetry write errors to keep game running
+  }
+}
+
+function logDeath(levelId) {
+  ensureTelemetry();
+  if (!levelId) return;
+  const deaths = state.telemetry.deathsByLevel || {};
+  deaths[levelId] = (deaths[levelId] || 0) + 1;
+  state.telemetry.deathsByLevel = deaths;
+  persistTelemetry();
+}
+
+function logPick(category) {
+  ensureTelemetry();
+  if (!category) return;
+  const picks = state.telemetry.picksByCategory || {};
+  picks[category] = (picks[category] || 0) + 1;
+  state.telemetry.picksByCategory = picks;
+  persistTelemetry();
+}
+
+function loadGame() {
+  if (!fs.existsSync(SAVE_PATH)) return false;
+  try {
+    const raw = fs.readFileSync(SAVE_PATH, 'utf-8');
+    const data = JSON.parse(raw);
+    state.levelIndex = data.levelIndex || 0;
+    state.waveIndex = data.waveIndex || 0;
+    state.tickCount = data.tickCount || 0;
+    state.budgetRemaining = data.budgetRemaining || levels[state.levelIndex].budget;
+    state.difficulty = data.difficulty || state.difficulty;
+    state.options = data.options || state.options;
+
+    const level = levels[state.levelIndex];
+    state.waveState = data.waveState || createWaveState(level.waves[state.waveIndex]);
+    state.totalWaves = level.waves.length;
+    state.currentAct = level.act;
+
+    const p = data.player || {};
+    state.player.x = p.x || state.player.x;
+    state.player.y = p.y || state.player.y;
+    state.player.hp = p.hp || state.player.hp;
+    state.player.maxHp = p.maxHp || state.player.maxHp;
+    state.player.weaponDamage = p.weaponDamage || state.player.weaponDamage;
+    state.player.attackCooldownMs = p.attackCooldownMs || state.player.attackCooldownMs;
+    state.player.playstyle = p.playstyle || state.player.playstyle;
+
+    state.enemies = (data.enemies || []).map((rec) => {
+      const base = enemies[rec.type] || enemies.scrapper;
+      const enemy = new Enemy(base, rec.x || 1, rec.y || 1, state.levelIndex);
+      enemy.hp = rec.hp;
+      enemy.maxHp = rec.maxHp;
+      enemy.damage = rec.damage;
+      enemy.moveCooldownTicks = rec.moveCooldownTicks;
+      enemy.aoeRange = rec.aoeRange;
+      enemy.aoeDamage = rec.aoeDamage;
+      enemy.aoeCooldown = rec.aoeCooldown;
+      enemy.boss = rec.boss;
+      enemy.resistance = rec.resistance;
+      return enemy;
+    });
+
+    state.messages.push('Save loaded.');
+    return true;
+  } catch (err) {
+    state.messages.push('Load failed.');
+    return false;
+  }
 }
 
 function spawnEnemy(type, levelScale = 0) {
@@ -68,6 +227,10 @@ function spawnEnemy(type, levelScale = 0) {
     y = clamp(y + 1, 1, height - 2);
   }
   const enemy = new Enemy(template, x, y, levelScale);
+  enemy.hp = Math.ceil(enemy.hp * state.difficulty.hp);
+  enemy.maxHp = Math.ceil(enemy.maxHp * state.difficulty.hp);
+  enemy.damage = Math.max(1, Math.ceil(enemy.damage * state.difficulty.dmg));
+  enemy.aoeDamage = Math.max(1, Math.ceil(enemy.aoeDamage * state.difficulty.dmg));
   state.enemies.push(enemy);
   return true;
 }
@@ -138,7 +301,17 @@ function enemyAct(enemy) {
 }
 
 function handleKey(name) {
-  if (!running || state.menuOpen) return;
+  if (!running) return;
+
+  // Allow pause/resume while not in reward menus/cutscenes
+  if (name === 'p') {
+    if (!state.menuOpen && !state.cutsceneOpen) {
+      togglePause();
+    }
+    return;
+  }
+
+  if (state.paused || state.menuOpen) return;
 
   switch (name) {
     case 'UP':
@@ -157,9 +330,9 @@ function handleKey(name) {
     case 'd':
       tryMove(1, 0);
       break;
-    case ' ': // space
+    case state.options.attackKey:
       attack();
-      break;
+      return;
     case 'q':
     case 'CTRL_C':
       exitGame('Quit.');
@@ -171,7 +344,7 @@ function handleKey(name) {
 
 function checkLevelAndWaveCompletion() {
   if (state.player.hp <= 0) {
-    exitGame('You were defeated.');
+    exitGame('You were defeated.', { deathLevel: levels[state.levelIndex].id });
     return true;
   }
 
@@ -193,11 +366,14 @@ function checkLevelAndWaveCompletion() {
   return false;
 }
 
-function exitGame(message) {
+function exitGame(message, opts = {}) {
   if (!running) return;
   running = false;
   clearInterval(tickHandle);
   teardownInput();
+  if (opts.deathLevel) {
+    logDeath(opts.deathLevel);
+  }
   state.messages.push(message);
   render({ ...state, totalLevels: levels.length, totalWaves: levels[state.levelIndex].waves.length });
   term.moveTo(1, height + 4, 'Press Enter to exit...');
@@ -211,7 +387,7 @@ function exitGame(message) {
 }
 
 function gameTick() {
-  if (state.menuOpen) return;
+  if (state.menuOpen || state.paused) return;
   state.tickCount += 1;
 
   if (state.waveState) {
@@ -308,6 +484,7 @@ function openRewardMenu() {
     if (!options[index]) return;
     const chosen = options[index];
     chosen.apply(state.player);
+    logPick(chosen.category);
     // Small heal between levels
     state.player.hp = Math.min(state.player.maxHp, state.player.hp + 5);
     state.messages.push(`Picked ${chosen.name}.`);
@@ -349,13 +526,19 @@ function resumeFromMenu() {
 function start() {
   term.fullscreen(true);
   setupInput(handleKey);
+  const loaded = loadGame();
   const level = levels[state.levelIndex];
-  state.waveState = createWaveState(level.waves[state.waveIndex]);
-  state.totalWaves = level.waves.length;
-  state.budgetRemaining = level.budget;
-  state.messages.push(`Starting level ${state.levelIndex + 1}: ${level.name}`);
+  if (!loaded) {
+    state.waveState = createWaveState(level.waves[state.waveIndex]);
+    state.totalWaves = level.waves.length;
+    state.budgetRemaining = level.budget;
+    state.messages.push(`Starting level ${state.levelIndex + 1}: ${level.name}`);
+  } else {
+    state.totalWaves = level.waves.length;
+    state.messages.push(`Resumed level ${state.levelIndex + 1}: ${level.name}`);
+  }
   render({ ...state, totalLevels: levels.length, totalWaves: level.waves.length });
-  if (level.cutscene) {
+  if (level.cutscene && !loaded) {
     showCutscene(level.cutscene, () => startTick());
   } else {
     startTick();
@@ -423,6 +606,67 @@ function showCutscene(text, onDone) {
       term.fullscreen(true);
       state.cutsceneOpen = false;
       if (onDone) onDone();
+    }
+  };
+  term.on('key', handler);
+}
+
+function togglePause() {
+  if (state.paused) {
+    state.paused = false;
+    term.clear();
+    term.fullscreen(true);
+    render({ ...state, totalLevels: levels.length, totalWaves: levels[state.levelIndex].waves.length });
+    return;
+  }
+
+  state.paused = true;
+  term.fullscreen(false);
+  term.clear();
+  term.moveTo(1, 1, 'PAUSED');
+  term.moveTo(1, 3, 'Options:');
+  term.moveTo(3, 4, `1) Sound: ${state.options.soundOn ? 'On' : 'Off'}`);
+  term.moveTo(3, 5, `2) High-contrast: ${state.options.highContrast ? 'On' : 'Off'}`);
+  term.moveTo(3, 6, `3) Attack key: ${state.options.attackKey === ' ' ? 'Space' : state.options.attackKey}`);
+  term.moveTo(1, 7, 'Press p to resume');
+  term.moveTo(1, 8, 'Press 1/2 to toggle options');
+  term.moveTo(1, 9, 'Press 3 to remap attack key');
+  term.moveTo(1, 10, 'Press s to quick-save, l to load');
+
+  let waitingRemap = false;
+
+  const handler = (name) => {
+    if (name === '1') {
+      state.options.soundOn = !state.options.soundOn;
+      term.moveTo(3, 4, `1) Sound: ${state.options.soundOn ? 'On ' : 'Off'}`);
+    }
+    if (name === '2') {
+      state.options.highContrast = !state.options.highContrast;
+      term.moveTo(3, 5, `2) High-contrast: ${state.options.highContrast ? 'On ' : 'Off'}`);
+    }
+    if (name === '3') {
+      waitingRemap = true;
+      term.moveTo(1, 12, 'Press new attack key...               ');
+      return;
+    }
+    if (waitingRemap) {
+      state.options.attackKey = name;
+      term.moveTo(3, 6, `3) Attack key: ${name === ' ' ? 'Space' : name}              `);
+      term.moveTo(1, 12, 'Attack key set.                       ');
+      waitingRemap = false;
+      return;
+    }
+    if (name === 's' || name === 'S') {
+      saveGame();
+      term.moveTo(1, 11, 'Saved.                                ');
+    }
+    if (name === 'l' || name === 'L') {
+      loadGame();
+      term.moveTo(1, 11, 'Loaded.                               ');
+    }
+    if (name === 'p' || name === 'P') {
+      term.removeListener('key', handler);
+      togglePause();
     }
   };
   term.on('key', handler);

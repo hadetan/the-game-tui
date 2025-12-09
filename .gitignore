@@ -1,3 +1,5 @@
 node_modules
 story.md
 .vscode
+savegame.json
+telemetry.json
