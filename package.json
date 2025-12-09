@@ -1,6 +1,6 @@
 {
   "name": "cleaners-march",
-  "version": "0.0.2",
+  "version": "0.0.4",
   "description": "Terminal roguelite prototype for The Cleaner’s March (real-time tactical pacing).",
   "main": "src/index.js",
   "scripts": {

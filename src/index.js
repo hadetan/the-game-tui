@@ -90,7 +90,14 @@ function attack() {
     return;
   }
   targets.forEach((enemy) => {
+    const before = enemy.hp;
     enemy.hp -= state.player.weaponDamage;
+    const dealt = Math.max(0, before - Math.max(0, enemy.hp));
+    state.player.playstyle.damageDealt.melee += dealt;
+    if (enemy.hp <= 0 && !enemy._dead) {
+      enemy._dead = true;
+      state.player.playstyle.kills.melee += 1;
+    }
   });
   state.messages.push('Pipeblade connects!');
 }
@@ -112,6 +119,7 @@ function enemyAct(enemy) {
   const dist = Math.abs(enemy.x - state.player.x) + Math.abs(enemy.y - state.player.y);
   if (dist === 0) {
     state.player.hp -= enemy.damage;
+    state.player.playstyle.damageTaken += enemy.damage;
     state.messages.push('Enemy hits you!');
   }
 }
@@ -212,15 +220,29 @@ function startTick() {
   tickHandle = setInterval(gameTick, 100);
 }
 
+function categoryBias(category) {
+  const { playstyle } = state.player;
+  let bias = 1;
+  const meleeDamage = playstyle.damageDealt.melee;
+  const damageTaken = playstyle.damageTaken;
+  if ((category === 'strength' || category === 'handling') && meleeDamage > 30) {
+    bias += 0.5;
+  }
+  if (category === 'durability' && damageTaken > state.player.maxHp * 0.5) {
+    bias += 0.8;
+  }
+  return bias;
+}
+
 function weightedSample(pool, count) {
   const result = [];
   const items = [...pool];
   while (result.length < count && items.length > 0) {
-    const total = items.reduce((acc, u) => acc + (rarityWeight[u.rarity] || 1), 0);
+    const total = items.reduce((acc, u) => acc + (rarityWeight[u.rarity] || 1) * categoryBias(u.category), 0);
     let roll = Math.random() * total;
     let chosenIndex = 0;
     for (let i = 0; i < items.length; i += 1) {
-      roll -= (rarityWeight[items[i].rarity] || 1);
+      roll -= (rarityWeight[items[i].rarity] || 1) * categoryBias(items[i].category);
       if (roll <= 0) {
         chosenIndex = i;
         break;
@@ -228,6 +250,16 @@ function weightedSample(pool, count) {
     }
     const [picked] = items.splice(chosenIndex, 1);
     result.push(picked);
+  }
+
+  // Soft guarantee: ensure at least one uncommon+ if available
+  const hasBetter = pool.some((u) => u.rarity !== 'common');
+  const allCommon = result.every((u) => u.rarity === 'common');
+  if (hasBetter && allCommon) {
+    const betterPool = pool.filter((u) => u.rarity !== 'common');
+    if (betterPool.length > 0) {
+      result[0] = betterPool[Math.floor(Math.random() * betterPool.length)];
+    }
   }
   return result;
 }
@@ -263,7 +295,7 @@ function openRewardMenu() {
     if (!options[index]) return;
     const chosen = options[index];
     chosen.apply(state.player);
-    // Small heal between levels to smooth difficulty
+    // Small heal between levels
     state.player.hp = Math.min(state.player.maxHp, state.player.hp + 5);
     state.messages.push(`Picked ${chosen.name}.`);
     screen.destroy();

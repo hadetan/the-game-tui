@@ -65,6 +65,27 @@ const upgrades = [
       player.attackCooldownMs = Math.max(30, Math.floor(player.attackCooldownMs * 0.6));
     },
   },
+  {
+    id: 'plated-cover',
+    name: 'Plated Cover',
+    rarity: 'uncommon',
+    category: 'durability',
+    description: '+8 max HP and heal 8.',
+    apply: (player) => {
+      player.maxHp += 8;
+      player.hp = Math.min(player.maxHp, player.hp + 8);
+    },
+  },
+  {
+    id: 'fine-hone',
+    name: 'Fine Hone',
+    rarity: 'rare',
+    category: 'strength',
+    description: '+6 weapon damage.',
+    apply: (player) => {
+      player.weaponDamage += 6;
+    },
+  },
 ];
 
 const rarityWeight = {
